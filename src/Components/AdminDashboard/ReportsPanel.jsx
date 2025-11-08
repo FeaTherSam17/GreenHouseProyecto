@@ -54,6 +54,11 @@ const ReportsPanel = () => {
       setError('Por favor, ingrese las fechas de inicio y fin');
       return;
     }
+    // Validación de rango de fechas
+    if (startDate > endDate) {
+      setError('La fecha de inicio no puede ser mayor que la fecha de fin');
+      return;
+    }
     setError('');
     setProductos([]);
     setSelectedVentaId(null);

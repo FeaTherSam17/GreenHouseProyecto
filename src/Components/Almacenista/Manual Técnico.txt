@@ -1,0 +1,112 @@
+==========================
+MANUAL TÉCNICO - GREENHOUSE PORTAL
+==========================
+
+1. DESCRIPCIÓN GENERAL
+----------------------
+GreenHouse Portal es un sistema integral de administración para invernaderos, desarrollado con React en el frontend, Node.js/Express en el backend y MySQL como base de datos. Permite la gestión de usuarios, tareas, proveedores, productos, ventas y reportes, con roles diferenciados para cada tipo de usuario.
+
+2. TECNOLOGÍAS UTILIZADAS
+--------------------------
+- Frontend: React, React Router DOM, CSS Modules, Axios
+- Backend: Node.js, Express, MySQL2, CORS
+- Base de datos: MySQL
+- Despliegue: Firebase Hosting (frontend), Railway/Heroku/Servidor propio (backend)
+
+3. ESTRUCTURA DEL PROYECTO
+---------------------------
+proyecto/
+│
+├── src/
+│   ├── Components/
+│   │   ├── Login/
+│   │   ├── AdminDashboard/
+│   │   ├── Cajero/
+│   │   ├── Almacenista/
+│   │   ├── Jardinero/
+│   │   └── Router/
+│   ├── servicios/
+│   └── App.js
+│
+├── server/
+│   ├── index.js
+│   ├── # GreenHouse Portal.md
+│   └── GuiaDespliegue.txt
+│
+├── public/
+│   └── index.html, manifest.json, robots.txt
+│
+├── .firebaserc
+├── README.md
+└── package.json
+
+4. INSTALACIÓN Y CONFIGURACIÓN
+-------------------------------
+1. Clona el repositorio.
+2. Instala dependencias:
+   npm install
+3. Configura la base de datos MySQL según el modelo y credenciales usadas en el backend.
+4. Configura variables de entorno si es necesario.
+
+5. EJECUCIÓN DEL PROYECTO
+--------------------------
+- Frontend:
+  npm start
+- Backend:
+  node server/index.js
+- Despliegue:
+  npm run build
+  firebase init
+  firebase deploy
+
+6. BASE DE DATOS
+-----------------
+- Motor: MySQL
+- Tablas principales: usuarios, productos, proveedores, ventas, tareas, categorías, operaciones_proveedores, etc.
+- Relaciones:
+  - Productos asociados a proveedores y categorías.
+  - Ventas y operaciones registran movimientos de productos y proveedores.
+  - Usuarios con roles diferenciados.
+
+7. RUTAS PRINCIPALES (FRONTEND)
+--------------------------------
+- /                → Login
+- /AdminDashboard  → Panel de administrador (rol 1)
+- /Almacenista     → Panel de almacenista (rol 2)
+- /Cajero          → Panel de cajero (rol 3)
+- /Jardinero       → Panel de jardinero (rol 4)
+
+El acceso a cada ruta está protegido por el componente ProtectedRoute que valida el rol del usuario.
+
+8. ROLES Y PERMISOS
+--------------------
+- Administrador (1): Acceso total a la gestión de usuarios, reportes y configuración.
+- Almacenista (2): Gestión de inventario, productos y proveedores.
+- Cajero (3): Registro y gestión de ventas.
+- Jardinero (4): Visualización y gestión de tareas asignadas.
+
+9. COMPONENTES DESTACADOS
+--------------------------
+- Login: Autenticación y redirección según rol.
+- Paneles: Cada rol tiene su propio panel con funcionalidades específicas.
+- Servicios: Comunicación con el backend usando Axios y fetch.
+- Protección de rutas: Solo usuarios autenticados y con el rol adecuado pueden acceder a cada sección.
+
+10. DESPLIEGUE
+---------------
+- El proyecto puede desplegarse en Firebase Hosting.
+- El backend puede alojarse en Railway, Heroku, o un servidor propio.
+- Configura correctamente las URLs de API en producción.
+
+11. LICENCIA
+-------------
+Consulta el archivo de licencia si está presente en el repositorio.
+
+12. RECURSOS Y DOCUMENTACIÓN
+-----------------------------
+- Documentación oficial de React: https://reactjs.org/
+- Documentación de Express: https://expressjs.com/
+- Documentación de MySQL: https://dev.mysql.com/doc/
+- Guía de despliegue de Create React App: https://facebook.github.io/create-react-app/docs/deployment
+
+==========================

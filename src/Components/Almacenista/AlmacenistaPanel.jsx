@@ -184,6 +184,22 @@ const AlmacenistaPanel = () => {
     navigate('/');
   };
 
+  // Agrupar productos por nombre y sumar cantidades (esto va antes del return)
+  const productosGenerales = Object.values(
+    productos.reduce((acc, prod) => {
+      const nombre = prod.nombre.trim().toLowerCase();
+      if (!acc[nombre]) {
+        acc[nombre] = {
+          nombre: prod.nombre,
+          cantidad: prod.stock
+        };
+      } else {
+        acc[nombre].cantidad += prod.stock;
+      }
+      return acc;
+    }, {})
+  );
+
   if (loading) return <div className="loading">Cargando...</div>;
   if (error) return <div className="error">Error: {error}</div>;
 
@@ -348,6 +364,33 @@ const AlmacenistaPanel = () => {
                           </button>
                         </div>
                       </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Tabla general de productos agrupados por nombre */}
+          <div className="productos-table-container">
+            <h3>Resumen General de Productos</h3>
+            <table className="productos-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Cantidad Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productosGenerales.length === 0 ? (
+                  <tr>
+                    <td colSpan="2" className="no-resultados">No hay productos</td>
+                  </tr>
+                ) : (
+                  productosGenerales.map((prod, idx) => (
+                    <tr key={idx}>
+                      <td>{prod.nombre}</td>
+                      <td>{prod.cantidad}</td>
                     </tr>
                   ))
                 )}

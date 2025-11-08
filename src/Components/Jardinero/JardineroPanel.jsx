@@ -173,10 +173,10 @@ const JardineroPanel = () => {
             </div>
             
             <div className="modal-body">
-              <div className="info-row">
+              {/* <div className="info-row">
                 <i className="fas fa-map-marker-alt"></i>
                 <p><strong>Ubicación:</strong> {tareaSeleccionada.zona}</p>
-              </div>
+              </div> */}
               
               <div className="info-row">
                 <i className="far fa-calendar-alt"></i>

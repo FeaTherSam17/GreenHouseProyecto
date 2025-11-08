@@ -128,7 +128,12 @@ const UserManagement = () => {
         setUsers(updatedUsers);
         closeModal();
       } else {
-        alert(result.error || 'Error al guardar usuario');
+        // Aquí mostramos el mensaje específico si el username ya existe
+        if (result.error && result.error.toLowerCase().includes('usuario ya existe')) {
+          alert('No se puede insertar: el nombre de usuario ya está registrado en la base de datos.');
+        } else {
+          alert(result.error || 'Error al guardar usuario');
+        }
       }
     } catch (error) {
       console.error('Error al guardar usuario:', error);
@@ -307,7 +312,7 @@ const UserManagement = () => {
                   <option value={4}>Jardinero</option>
                   <option value={2}>Almacenista</option>
                   <option value={3}>Cajero</option>
-                  {/* <option value={1}>Administrador</option>  <-- Elimina o comenta esta línea */}
+                 <option value={1}>Administrador</option>  {/*<-- Elimina o comenta esta línea */}
                 </select>
               </div>
               {/* Permitir cambiar contraseña al editar, excepto admin */}

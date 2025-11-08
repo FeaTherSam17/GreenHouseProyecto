@@ -469,6 +469,13 @@ app.delete('/suppliers/:id', (req, res) => {
   db.query(sql, [id], (err) => {
     if (err) {
       console.error('Error al eliminar proveedor:', err);
+      // Detectar error de clave foránea (productos asociados)
+      if (err.code === 'ER_ROW_IS_REFERENCED_' || err.code === 'ER_ROW_IS_REFERENCED_2' || (err.errno === 1451)) {
+        return res.status(400).json({
+          success: false,
+          error: 'No se puede eliminar el proveedor porque tiene productos asociados.'
+        });
+      }
       return res.status(500).json({
         success: false,
         error: 'Error al eliminar proveedor',
@@ -521,56 +528,133 @@ app.get('/operaciones-proveedores', (req, res) => {
   });
 });
 
-// Crear una nueva operación para un proveedor
+// Crear una nueva operación para un proveedor y actualizar stock de productos
 app.post('/operaciones-proveedores', (req, res) => {
-  const { tipo, id_proveedor, fecha, total, descripcion } = req.body;
-  
+  const { tipo, id_proveedor, fecha, total, descripcion, productos } = req.body;
+
   // Validamos campos obligatorios (excepto descripción)
-  if (!tipo || !id_proveedor || !fecha || !total) {
+  if (!tipo || !id_proveedor || !fecha || !total || !Array.isArray(productos) || productos.length === 0) {
     return res.status(400).json({
       success: false,
-      error: 'Todos los campos son obligatorios excepto descripción'
+      error: 'Todos los campos son obligatorios y debe haber al menos un producto'
     });
   }
 
-  const sql = 'INSERT INTO operaciones_proveedores SET ?';
-  // Insertamos la nueva operación en la base de datos
-  db.query(sql, { tipo, id_proveedor, fecha, total, descripcion }, (err, result) => {
+  // Inicia la transacción
+  db.beginTransaction(err => {
     if (err) {
-      console.error('Error al crear operación:', err);
-      return res.status(500).json({
-        success: false,
-        error: 'Error al crear operación',
-        details: err.message
-      });
+      return res.status(500).json({ success: false, error: 'Error al iniciar transacción', details: err.message });
     }
-    
-    // Obtenemos los datos completos de la operación recién insertada
-    const getSql = `
-      SELECT 
-        op.*, 
-        p.nombre AS proveedor, 
-        p.factura AS factura_proveedor
-      FROM operaciones_proveedores op
-      JOIN Proveedores p ON op.id_proveedor = p.id_proveedor
-      WHERE op.id_operacion = ?
-    `;
-    
-    db.query(getSql, [result.insertId], (err, results) => {
-      if (err || !results.length) {
-        return res.json({
-          success: true,
-          id: result.insertId,
-          message: 'Operación creada pero no se pudo recuperar los detalles'
+
+    // Inserta la operación
+    const sqlOperacion = 'INSERT INTO operaciones_proveedores SET ?';
+    db.query(sqlOperacion, { tipo, id_proveedor, fecha, total, descripcion }, (err, result) => {
+      if (err) {
+        return db.rollback(() => {
+          res.status(500).json({ success: false, error: 'Error al crear operación', details: err.message });
         });
       }
-      
-      // Enviamos los datos completos de la operación recién creada
-      res.json({
-        success: true,
-        operacion: results[0],
-        message: 'Operación creada exitosamente'
+
+      const id_operacion = result.insertId;
+
+      // Procesa cada producto para actualizar stock
+      let errorStock = null;
+      let processed = 0;
+
+      productos.forEach(prod => {
+        // Primero intenta buscar por id_producto
+        db.query('SELECT stock, id_producto FROM Producto WHERE id_producto = ?', [prod.id_producto], (err, rows) => {
+          if (!err && rows.length > 0) {
+            // Producto encontrado por ID, actualiza stock normalmente
+            let nuevoStock = tipo === 'compra'
+              ? rows[0].stock + prod.cantidad
+              : rows[0].stock - prod.cantidad;
+
+            if (tipo === 'venta' && nuevoStock < 0) {
+              errorStock = `Stock insuficiente para el producto ID ${prod.id_producto}`;
+              return done();
+            }
+
+            db.query('UPDATE Producto SET stock = ? WHERE id_producto = ?', [nuevoStock, prod.id_producto], (err) => {
+              if (err) {
+                errorStock = 'Error al actualizar stock';
+              }
+              return done();
+            });
+          } else {
+            // Si no se encontró por ID, busca por nombre y proveedor
+            db.query(
+              'SELECT stock, id_producto FROM Producto WHERE nombre = ? AND id_proveedor = ?',
+              [prod.nombre, id_proveedor],
+              (err2, rows2) => {
+                if (!err2 && rows2.length > 0) {
+                  // Producto encontrado por nombre y proveedor, actualiza stock
+                  let nuevoStock = tipo === 'compra'
+                    ? rows2[0].stock + prod.cantidad
+                    : rows2[0].stock - prod.cantidad;
+
+                  if (tipo === 'venta' && nuevoStock < 0) {
+                    errorStock = `Stock insuficiente para el producto ${prod.nombre}`;
+                    return done();
+                  }
+
+                  db.query('UPDATE Producto SET stock = ? WHERE id_producto = ?', [nuevoStock, rows2[0].id_producto], (err3) => {
+                    if (err3) {
+                      errorStock = 'Error al actualizar stock';
+                    }
+                    return done();
+                  });
+                } else {
+                  // Producto realmente no existe, lo registramos
+                  // NOTA: Asegúrate de que prod tenga los campos necesarios: nombre, precio, cantidad, id_categoria
+                  const toInitCap = (str) => {
+                    return str.replace(/\w\S*/g, (txt) =>
+                      txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+                    );
+                  };
+                  const nuevoProducto = {
+                    nombre: toInitCap(prod.nombre),
+                    id_categoria: prod.categoria || 1,
+                    precio: prod.precio || 0,
+                    stock: prod.cantidad,
+                    id_proveedor: id_proveedor
+                  };
+                  db.query('INSERT INTO Producto SET ?', nuevoProducto, (errInsert, resultInsert) => {
+                    if (errInsert) {
+                      errorStock = 'Error al registrar producto nuevo';
+                      return done();
+                    }
+                    return done();
+                  });
+                }
+              }
+            );
+          }
+        });
       });
+
+      function done() {
+        processed++;
+        if (processed === productos.length) {
+          if (errorStock) {
+            return db.rollback(() => {
+              res.status(400).json({ success: false, error: errorStock });
+            });
+          }
+          db.commit(err => {
+            if (err) {
+              return db.rollback(() => {
+                res.status(500).json({ success: false, error: 'Error al confirmar transacción', details: err.message });
+              });
+            }
+            res.json({
+              success: true,
+              message: 'Operación y stock actualizados correctamente',
+              id_operacion
+            });
+          });
+        }
+      }
     });
   });
 });
@@ -982,52 +1066,20 @@ app.get('/productos', (req, res) => {
   });
 });
 
-// Modificar un producto existente
+// Endpoint para actualizar solo el stock de un producto (opcional, útil para otras operaciones)
 app.put('/productos/:id', (req, res) => {
   const { id } = req.params;
-  const { nombre, id_categoria, precio, stock, id_proveedor } = req.body;
+  const { stock } = req.body;
 
-  if (!nombre || !id_categoria || precio === undefined || stock === undefined) {
-    return res.status(400).json({
-      success: false,
-      message: 'Nombre, categoría, precio y stock son obligatorios'
-    });
+  if (typeof stock !== 'number' || stock < 0) {
+    return res.status(400).json({ success: false, error: 'Stock inválido' });
   }
 
-  const updateSql = `
-    UPDATE producto 
-    SET nombre = ?, id_categoria = ?, precio = ?, stock = ?, id_proveedor = ?
-    WHERE id_producto = ?
-  `;
-
-  db.query(updateSql, [
-    nombre,
-    id_categoria,
-    parseFloat(precio),
-    parseInt(stock),
-    id_proveedor || null,
-    id
-  ], (err, result) => {
+  db.query('UPDATE Producto SET stock = ? WHERE id_producto = ?', [stock, id], (err) => {
     if (err) {
-      console.error('❌ Error al modificar producto:', err);
-      return res.status(500).json({
-        success: false,
-        message: 'Error al modificar producto',
-        error: err.message
-      });
+      return res.status(500).json({ success: false, error: 'Error al actualizar stock', details: err.message });
     }
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Producto no encontrado'
-      });
-    }
-
-    return res.json({
-      success: true,
-      message: 'Producto modificado correctamente'
-    });
+    res.json({ success: true, message: 'Stock actualizado correctamente' });
   });
 });
 
@@ -1172,6 +1224,40 @@ app.post('/ventas', (req, res) => {
 });
 
 // --------------------- SECCION DEL JARDINERO --------------------
+
+// Endpoint mejorado: buscar productos por nombre de producto y nombre de proveedor (ambos opcionales)
+app.get('/productos-por-proveedor', (req, res) => {
+  const { id_proveedor, nombre_producto, nombre_proveedor } = req.query;
+  let sql = `
+    SELECT p.*, 
+      CONCAT(UCASE(LEFT(pr.nombre,1)),LCASE(SUBSTRING(pr.nombre,2))) AS nombre_proveedor
+    FROM Producto p
+    LEFT JOIN Proveedores pr ON p.id_proveedor = pr.id_proveedor
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (id_proveedor) {
+    sql += ' AND p.id_proveedor = ?';
+    params.push(id_proveedor);
+  }
+  if (nombre_producto) {
+    sql += ' AND p.nombre LIKE ?';
+    params.push(`%${nombre_producto}%`);
+  }
+  if (nombre_proveedor) {
+    sql += ' AND pr.nombre LIKE ?';
+    params.push(`%${nombre_proveedor}%`);
+  }
+
+  db.query(sql, params, (err, results) => {
+    if (err) {
+      return res.status(500).json({ success: false, error: 'Error al obtener productos del proveedor' });
+    }
+    res.json({ success: true, productos: results });
+  });
+});
+
 
 // Obtener tareas pendientes asignadas a un jardinero específico
 app.get('/tareas/jardinero/:idJardinero', (req, res) => {

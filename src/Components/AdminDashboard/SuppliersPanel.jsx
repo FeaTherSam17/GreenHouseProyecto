@@ -17,33 +17,45 @@ const SuppliersPanel = () => {
     type: 'compra',
     supplierId: '',
     date: new Date().toISOString().split('T')[0],
-    productos: [],
-    amount: 0
-    // Eliminado: factura (no existe en la tabla operaciones_proveedores)
+    productos: [], // Array para almacenar productos y cantidades de la operación (usado en devolucion)
+    // Eliminado: amount y description
+  });
+  // Nuevo estado para los detalles del producto en una operación de compra
+  const [newProductDetails, setNewProductDetails] = useState({
+    nombre: '',
+    categoria: '', // Asumiendo que necesitas la categoría para un nuevo producto
+    precio: '',
+    cantidad: ''
   });
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('');
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [productosProveedor, setProductosProveedor] = useState([]); // Estado para productos del proveedor seleccionado (usado en devolucion)
+  const [categorias, setCategorias] = useState([]); // Estado para cargar categorías
 
-  // Cargar datos iniciales
+  // Cargar datos iniciales (proveedores y operaciones)
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [suppliersRes, operationsRes] = await Promise.all([
+        const [suppliersRes, operationsRes, categoriasRes] = await Promise.all([
           fetch('http://localhost:3001/suppliers'),
-          fetch('http://localhost:3001/operaciones-proveedores')
+          fetch('http://localhost:3001/operaciones-proveedores'),
+          fetch('http://localhost:3001/categorias') // Asumiendo un endpoint para categorías
         ]);
 
         if (!suppliersRes.ok) throw new Error('Error al cargar proveedores');
         if (!operationsRes.ok) throw new Error('Error al cargar operaciones');
+        if (!categoriasRes.ok) throw new Error('Error al cargar categorías');
 
         const suppliersData = await suppliersRes.json();
         const operationsData = await operationsRes.json();
+        const categoriasData = await categoriasRes.json();
 
         setSuppliers(suppliersData.suppliers || []);
         setOperations(operationsData.operaciones || []);
+        setCategorias(categoriasData.categorias || []); // Asumiendo que devuelve { categorias: [...] }
       } catch (err) {
         console.error('Error:', err);
         alert(err.message);
@@ -55,99 +67,236 @@ const SuppliersPanel = () => {
     fetchData();
   }, []);
 
-  // Guardar/Editar Proveedor
+  // Cargar productos del proveedor seleccionado cuando cambia el proveedor o se abre el modal (solo para devoluciones)
+  useEffect(() => {
+    // Cargar productos del proveedor seleccionado solo si el modal está abierto, es de operación
+    // y se ha seleccionado un proveedor, y el tipo de operación es 'devolucion'
+    if (showModal && modalType === 'operation' && newOperation.supplierId && newOperation.type === 'devolucion') {
+      setIsLoading(true);
+      // Cambiado para usar el nuevo endpoint
+      fetch(`http://localhost:3001/productos-por-proveedor?id_proveedor=${newOperation.supplierId}`)
+        .then(res => res.json())
+        .then(data => {
+          // Asegúrate de que la respuesta tenga una estructura esperada, ej: { success: true, productos: [...] }
+          if (data.success) {
+            setProductosProveedor(data.productos || []);
+          } else {
+            console.error('Error al cargar productos del proveedor:', data.error);
+            setProductosProveedor([]);
+          }
+        })
+        .catch(err => {
+          console.error('Error al cargar productos del proveedor:', err);
+          setProductosProveedor([]);
+        })
+        .finally(() => setIsLoading(false));
+    } else {
+      setProductosProveedor([]); // Limpiar productos si no hay proveedor seleccionado o no es modal de operación de devolución
+    }
+  }, [showModal, modalType, newOperation.supplierId, newOperation.type]); // Dependencia añadida: newOperation.type
+
+  // Manejar cambio de cantidad de producto en la operación (solo para devoluciones)
+  const handleProductQuantityChange = (productId, quantity) => {
+    const cantidad = parseInt(quantity) || 0;
+    setNewOperation(prevOperation => {
+      const updatedProductos = prevOperation.productos.filter(p => p.id_producto !== productId);
+      if (cantidad > 0) {
+        // Buscar el producto en la lista del proveedor para obtener precio y nombre
+        const productInfo = productosProveedor.find(p => p.id_producto === productId);
+        if (productInfo) {
+           updatedProductos.push({
+            id_producto: productId,
+            nombre: productInfo.nombre, // Incluir nombre para referencia
+            precio: parseFloat(productInfo.precio), // Asegurar que es número
+            cantidad: cantidad
+          });
+        }
+      }
+      // Recalcular el total basado en los productos seleccionados
+      const total = updatedProductos.reduce((sum, prod) => sum + (prod.precio * prod.cantidad), 0);
+      return {
+        ...prevOperation,
+        productos: updatedProductos,
+        // Actualizar el total en el estado de la operación
+        // Aunque la tabla operaciones_proveedores tiene 'total',
+        // si el backend procesa los productos, este campo podría ser redundante
+        // o usarse para validación. Lo mantenemos por ahora.
+        amount: total // Este 'amount' se usa para el total en la tabla de operaciones
+      };
+    });
+  };
+
+  // Manejar cambio en los campos del nuevo producto (solo para compras)
+  const handleNewProductDetailsChange = (e) => {
+    const { name, value } = e.target;
+    setNewProductDetails(prevDetails => ({
+      ...prevDetails,
+      [name]: value
+    }));
+  };
+
+  // Función para manejar el envío del formulario de proveedor (nuevo o edición)
   const handleSupplierSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
 
-    try {
-      const url = editingSupplier 
-        ? `http://localhost:3001/suppliers/${editingSupplier.id_proveedor}`
-        : 'http://localhost:3001/suppliers';
-      const method = editingSupplier ? 'PUT' : 'POST';
+    // Aquí va la lógica para enviar los datos del proveedor al backend
+    // Puedes usar 'newSupplier' para datos de un nuevo proveedor
+    // o 'editingSupplier' para datos de un proveedor existente
 
+    const supplierDataToSend = editingSupplier ? {
+      // Datos del proveedor editado
+      id_proveedor: editingSupplier.id_proveedor,
+      nombre: editingSupplier.nombre,
+      contacto: editingSupplier.contacto,
+      telefono: editingSupplier.telefono,
+      email: editingSupplier.email,
+      factura: editingSupplier.factura
+    } : {
+      // Datos del nuevo proveedor
+      nombre: newSupplier.nombre,
+      contacto: newSupplier.contacto,
+      telefono: newSupplier.telefono,
+      email: newSupplier.email,
+      factura: newSupplier.factura
+    };
+
+    const url = editingSupplier
+      ? `http://localhost:3001/suppliers/${editingSupplier.id_proveedor}` // Endpoint para actualizar
+      : 'http://localhost:3001/suppliers'; // Endpoint para crear
+
+    const method = editingSupplier ? 'PUT' : 'POST';
+
+    try {
       const response = await fetch(url, {
-        method,
+        method: method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingSupplier || newSupplier)
+        body: JSON.stringify(supplierDataToSend),
       });
 
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.error || 'Error en el servidor');
+      if (data.success) {
+        alert(editingSupplier ? '✅ Proveedor actualizado correctamente.' : '✅ Proveedor registrado correctamente.');
+        // Actualizar la lista de proveedores después de la operación
+        const suppliersRes = await fetch('http://localhost:3001/suppliers');
+        const suppliersData = await suppliersRes.json();
+        setSuppliers(suppliersData.suppliers || []);
 
-      // Actualizar estado
-      if (editingSupplier) {
-        setSuppliers(suppliers.map(s => 
-          s.id_proveedor === editingSupplier.id_proveedor 
-            ? { ...s, ...editingSupplier } 
-            : s
-        ));
+        // Cerrar modal y resetear estados
+        setShowModal(false);
+        setModalType('');
+        setNewSupplier({ nombre: '', contacto: '', telefono: '', email: '', factura: '' });
+        setEditingSupplier(null);
       } else {
-        setSuppliers([...suppliers, { ...newSupplier, id_proveedor: data.id }]);
+        alert(`❌ Error: ${data.error || 'Hubo un error al procesar el proveedor.'}`);
       }
-
-      // Resetear formulario
-      setShowModal(false);
-      setEditingSupplier(null);
-      setNewSupplier({
-        nombre: '',
-        contacto: '',
-        telefono: '',
-        email: '',
-        factura: ''
-      });
-
-      alert(data.message || 'Proveedor guardado exitosamente');
     } catch (err) {
-      console.error('Error:', err);
-      alert(err.message);
+      console.error('Error al procesar proveedor:', err);
+      alert('Hubo un error al comunicarse con el servidor.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Guardar Operación (sin factura)
+
+  // Guardar Operación (ahora con lógica condicional para compra/devolucion)
   const handleOperationSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
 
-    try {
-      const operationData = {
-        tipo: newOperation.type,
-        id_proveedor: newOperation.supplierId,
-        fecha: newOperation.date,
-        total: newOperation.amount,
-        descripcion: newOperation.description // Ahora usa description
-        // No incluir factura (no existe en la tabla)
-      };
+    let operationDataToSend = {
+      tipo: newOperation.type,
+      id_proveedor: newOperation.supplierId,
+      fecha: newOperation.date,
+      total: 0, // Se calculará o se enviará 0 si el backend lo calcula
+      productos: [] // Array de productos a enviar
+    };
 
+    if (newOperation.type === 'compra') {
+      // Validar campos del nuevo producto para compra
+      if (!newProductDetails.nombre || !newProductDetails.categoria || !newProductDetails.precio || !newProductDetails.cantidad) {
+        alert('Debes completar todos los campos del producto para la compra.');
+        setIsLoading(false);
+        return;
+      }
+      const cantidad = parseInt(newProductDetails.cantidad);
+      const precio = parseFloat(newProductDetails.precio);
+      if (cantidad <= 0 || isNaN(cantidad) || precio <= 0 || isNaN(precio)) {
+         alert('La cantidad y el precio deben ser números positivos.');
+         setIsLoading(false);
+         return;
+      }
+
+      // Formatear datos del nuevo producto para enviar
+      operationDataToSend.productos = [{
+        nombre: newProductDetails.nombre,
+        id_categoria: newProductDetails.categoria, // Enviar ID de categoría
+        precio: precio,
+        cantidad: cantidad
+      }];
+      operationDataToSend.total = precio * cantidad; // Calcular total para la compra
+
+    } else if (newOperation.type === 'devolucion') {
+      // Validar que se hayan seleccionado productos para devolución
+      if (newOperation.productos.length === 0) {
+        alert('Debes seleccionar al menos un producto para la devolución.');
+        setIsLoading(false);
+        return;
+      }
+       // Validar que las cantidades de devolución no excedan el stock
+       for (const selectedProd of newOperation.productos) {
+           const originalProd = productosProveedor.find(p => p.id_producto === selectedProd.id_producto);
+           if (!originalProd || selectedProd.cantidad > originalProd.stock) {
+               alert(`La cantidad a devolver para ${selectedProd.nombre} excede el stock disponible (${originalProd?.stock || 0}).`);
+               setIsLoading(false);
+               return;
+           }
+       }
+
+
+      // Los productos ya están en newOperation.productos con cantidad y precio
+      operationDataToSend.productos = newOperation.productos;
+      operationDataToSend.total = newOperation.productos.reduce((sum, prod) => sum + (prod.precio * prod.cantidad), 0);
+    }
+
+    try {
       const response = await fetch('http://localhost:3001/operaciones-proveedores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(operationData)
+        body: JSON.stringify(operationDataToSend)
       });
 
       const data = await response.json();
 
       if (!response.ok) throw new Error(data.error || 'Error en el servidor');
 
-      // Actualizar estado
-      setOperations([data.operacion, ...operations]);
+      // Recargar todas las operaciones para asegurar que se muestren los datos correctos
+      const operationsRes = await fetch('http://localhost:3001/operaciones-proveedores');
+      if (!operationsRes.ok) throw new Error('Error al recargar operaciones');
+      const operationsData = await operationsRes.json();
+      setOperations(operationsData.operaciones || []);
 
-      // Resetear formulario
+
+      // Resetear formulario y estados
       setShowModal(false);
       setNewOperation({
         type: 'compra',
         supplierId: '',
         date: new Date().toISOString().split('T')[0],
         productos: [],
-        amount: 0
       });
+      setNewProductDetails({ // Resetear también los detalles del nuevo producto
+        nombre: '',
+        categoria: '',
+        precio: '',
+        cantidad: ''
+      });
+      setProductosProveedor([]); // Limpiar productos del proveedor
 
       alert(data.message || 'Operación registrada exitosamente');
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error al guardar operación:', err);
       alert(err.message);
     } finally {
       setIsLoading(false);
@@ -155,21 +304,27 @@ const SuppliersPanel = () => {
   };
 
   // Eliminar Proveedor
-  const deleteSupplier = async (id) => {
-    if (!window.confirm('¿Eliminar este proveedor?')) return;
-    
+  const handleDeleteSupplier = async (id_proveedor) => {
+    if (!window.confirm('¿Estás seguro de eliminar este proveedor?')) return;
     setIsLoading(true);
     try {
-      const response = await fetch(`http://localhost:3001/suppliers/${id}`, { method: 'DELETE' });
+      const response = await fetch(`http://localhost:3001/suppliers/${id_proveedor}`, {
+        method: 'DELETE'
+      });
       const data = await response.json();
-
-      if (!response.ok) throw new Error(data.error || 'Error al eliminar');
-
-      setSuppliers(suppliers.filter(s => s.id_proveedor !== id));
-      alert(data.message || 'Proveedor eliminado');
+      if (data.success) {
+        setSuppliers(suppliers.filter(s => s.id_proveedor !== id_proveedor));
+        alert('Proveedor eliminado correctamente.');
+      } else {
+        // Aquí interpretamos el error del backend
+        if (data.error && data.error.toLowerCase().includes('productos asociados')) {
+          alert('No se puede eliminar el proveedor porque tiene productos asociados.');
+        } else {
+          alert(data.error || 'Error al eliminar proveedor');
+        }
+      }
     } catch (err) {
-      console.error('Error:', err);
-      alert(err.message);
+      alert('Error al eliminar proveedor');
     } finally {
       setIsLoading(false);
     }
@@ -178,7 +333,7 @@ const SuppliersPanel = () => {
   // Eliminar Operación
   const deleteOperation = async (id) => {
     if (!window.confirm('¿Eliminar esta operación?')) return;
-    
+
     setIsLoading(true);
     try {
       const response = await fetch(`http://localhost:3001/operaciones-proveedores/${id}`, { method: 'DELETE' });
@@ -186,10 +341,15 @@ const SuppliersPanel = () => {
 
       if (!response.ok) throw new Error(data.error || 'Error al eliminar');
 
-      setOperations(operations.filter(op => op.id_operacion !== id));
+      // Recargar todas las operaciones para asegurar que el stock se refleje correctamente
+      const operationsRes = await fetch('http://localhost:3001/operaciones-proveedores');
+      if (!operationsRes.ok) throw new Error('Error al recargar operaciones después de eliminar');
+      const operationsData = await operationsRes.json();
+      setOperations(operationsData.operaciones || []);
+
       alert(data.message || 'Operación eliminada');
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error al eliminar operación:', err);
       alert(err.message);
     } finally {
       setIsLoading(false);
@@ -198,9 +358,9 @@ const SuppliersPanel = () => {
 
   // Formatear moneda
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-MX', { 
-      style: 'currency', 
-      currency: 'MXN' 
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: 'MXN'
     }).format(amount);
   };
 
@@ -246,17 +406,22 @@ const SuppliersPanel = () => {
 
         <div className="actions-panel">
           {activeTab === 'operations' && (
-            <button 
+            <button
               className="action-button primary"
               onClick={() => {
                 setModalType('operation');
-                setNewOperation({ 
-                  type: 'compra', 
-                  supplierId: suppliers[0]?.id_proveedor || '', 
-                  date: new Date().toISOString().split('T')[0], 
-                  productos: [], 
-                  amount: 0
+                setNewOperation({
+                  type: 'compra', // Default a compra
+                  supplierId: suppliers[0]?.id_proveedor || '',
+                  date: new Date().toISOString().split('T')[0],
+                  productos: [],
                 });
+                 setNewProductDetails({ // Resetear detalles del nuevo producto al abrir modal de operación
+                    nombre: '',
+                    categoria: '',
+                    precio: '',
+                    cantidad: ''
+                 });
                 setShowModal(true);
               }}
               disabled={isLoading || suppliers.length === 0}
@@ -266,16 +431,16 @@ const SuppliersPanel = () => {
           )}
 
           {activeTab === 'suppliers' && (
-            <button 
+            <button
               className="action-button primary"
               onClick={() => {
                 setModalType('supplier');
-                setNewSupplier({ 
-                  nombre: '', 
-                  contacto: '', 
-                  telefono: '', 
-                  email: '', 
-                  factura: '' 
+                setNewSupplier({
+                  nombre: '',
+                  contacto: '',
+                  telefono: '',
+                  email: '',
+                  factura: ''
                 });
                 setEditingSupplier(null);
                 setShowModal(true);
@@ -301,7 +466,7 @@ const SuppliersPanel = () => {
                         <th>Tipo</th>
                         <th>Proveedor</th>
                         <th>Fecha</th>
-                        <th>Descripción</th>
+                        {/* <th>Descripción</th> Eliminado */}
                         <th>Monto</th>
                         <th>Acciones</th>
                       </tr>
@@ -316,10 +481,10 @@ const SuppliersPanel = () => {
                           </td>
                           <td>{op.proveedor}</td>
                           <td>{formatDate(op.fecha)}</td>
-                          <td>{op.descripcion}</td>
+                          {/* <td>{op.descripcion}</td> Eliminado */}
                           <td>{formatCurrency(op.total)}</td>
                           <td>
-                            <button 
+                            <button
                               className="action-icon danger"
                               onClick={() => deleteOperation(op.id_operacion)}
                               disabled={isLoading}
@@ -370,7 +535,7 @@ const SuppliersPanel = () => {
                               ✏️ Editar
                             </button>
                             <button
-                              onClick={() => deleteSupplier(supplier.id_proveedor)}
+                              onClick={() => handleDeleteSupplier(supplier.id_proveedor)}
                               disabled={isLoading}
                             >
                               🗑️ Eliminar
@@ -391,26 +556,36 @@ const SuppliersPanel = () => {
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <button 
+            <button
               className="close-modal"
               onClick={() => !isLoading && setShowModal(false)}
               disabled={isLoading}
             >
               ×
             </button>
-            
+
             {modalType === 'operation' ? (
               <form onSubmit={handleOperationSubmit}>
                 <h2>Registrar Nueva Operación</h2>
-                
+
                 <div className="form-group">
                   <label>Tipo de Operación *</label>
                   <select
                     value={newOperation.type}
-                    onChange={(e) => setNewOperation({ 
-                      ...newOperation, 
-                      type: e.target.value 
-                    })}
+                    onChange={(e) => {
+                        setNewOperation({
+                            ...newOperation,
+                            type: e.target.value,
+                            productos: [] // Limpiar productos seleccionados al cambiar tipo
+                        });
+                        setNewProductDetails({ // Limpiar detalles del nuevo producto al cambiar tipo
+                            nombre: '',
+                            categoria: '',
+                            precio: '',
+                            cantidad: ''
+                        });
+                        setProductosProveedor([]); // Limpiar productos del proveedor al cambiar tipo
+                    }}
                     required
                     disabled={isLoading}
                   >
@@ -423,9 +598,10 @@ const SuppliersPanel = () => {
                   <label>Proveedor *</label>
                   <select
                     value={newOperation.supplierId}
-                    onChange={(e) => setNewOperation({ 
-                      ...newOperation, 
-                      supplierId: e.target.value 
+                    onChange={(e) => setNewOperation({
+                      ...newOperation,
+                      supplierId: e.target.value,
+                      productos: [] // Limpiar productos al cambiar proveedor
                     })}
                     required
                     disabled={isLoading || suppliers.length === 0}
@@ -444,56 +620,136 @@ const SuppliersPanel = () => {
                   <input
                     type="date"
                     value={newOperation.date}
-                    onChange={(e) => setNewOperation({ 
-                      ...newOperation, 
-                      date: e.target.value 
+                    onChange={(e) => setNewOperation({
+                      ...newOperation,
+                      date: e.target.value
                     })}
                     required
                     disabled={isLoading}
                   />
                 </div>
 
-                <div className="form-group">
-                  <label>Descripción *</label>
-                  <textarea
-                    value={newOperation.description || ""}
-                    onChange={(e) => setNewOperation({ 
-                      ...newOperation, 
-                      description: e.target.value 
-                    })}
-                    placeholder="Ej: 50 bolsas de sustrato, 10 litros de fertilizante"
-                    required
-                    maxLength={100}
-                    disabled={isLoading}
-                  />
+                {/* Sección de productos condicional */}
+                {newOperation.type === 'compra' ? (
+                    // Campos para agregar un nuevo producto en una COMPRA
+                    <div className="form-group">
+                        <label>Detalles del Nuevo Producto *</label>
+                        <input
+                            type="text"
+                            name="nombre"
+                            placeholder="Nombre del Producto"
+                            value={newProductDetails.nombre}
+                            onChange={handleNewProductDetailsChange}
+                            required
+                            disabled={isLoading}
+                            maxLength={50}
+                        />
+                         <select
+                            name="categoria"
+                            value={newProductDetails.categoria}
+                            onChange={handleNewProductDetailsChange}
+                            required
+                            disabled={isLoading || categorias.length === 0}
+                         >
+                            <option value="">Seleccionar Categoría</option>
+                            {categorias.map(cat => (
+                                <option key={cat.id_categoria} value={cat.id_categoria}>
+                                    {cat.nombre}
+                                </option>
+                            ))}
+                         </select>
+                        <input
+                            type="number"
+                            name="precio"
+                            placeholder="Precio Individual"
+                            value={newProductDetails.precio}
+                            onChange={handleNewProductDetailsChange}
+                            required
+                            min="0.01"
+                            step="0.01"
+                            disabled={isLoading}
+                        />
+                        <input
+                            type="number"
+                            name="precioCompra"
+                            placeholder="Precio de Compra"
+                            value={newProductDetails.precioCompra}
+                            onChange={handleNewProductDetailsChange}
+                            min="0.01"
+                            step="0.01"
+                            required
+                        />
+                        <input
+                            type="number"
+                            name="cantidad"
+                            placeholder="Cantidad"
+                            value={newProductDetails.cantidad}
+                            onChange={handleNewProductDetailsChange}
+                            required
+                            min="1"
+                            step="1"
+                            disabled={isLoading}
+                        />
+                    </div>
+                ) : (
+                    // Lista de productos existentes para DEVOLUCION
+                    <div className="form-group">
+                        <label>Productos a devolver *</label>
+                        {isLoading ? (
+                            <p>Cargando productos...</p>
+                        ) : productosProveedor.length === 0 ? (
+                            <p>No hay productos asociados a este proveedor.</p>
+                        ) : (
+                            <div className="productos-operacion-list">
+                                {productosProveedor.map(prod => (
+                                    <div key={prod.id_producto} className="producto-item">
+                                        <span>{prod.nombre} ({formatCurrency(prod.precio)})</span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            // Max stock solo para devoluciones
+                                            max={newOperation.type === 'devolucion' ? prod.stock : undefined}
+                                            value={
+                                                newOperation.productos.find(p => p.id_producto === prod.id_producto)?.cantidad || ''
+                                            }
+                                            onChange={e => handleProductQuantityChange(prod.id_producto, e.target.value)}
+                                            disabled={isLoading}
+                                            placeholder="Cantidad"
+                                        />
+                                         {/* Mostrar stock solo para devoluciones */}
+                                         {newOperation.type === 'devolucion' && (
+                                             <span> Stock: {prod.stock}</span>
+                                         )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+
+                 {/* Mostrar el total calculado (solo para compra, o basado en seleccion para devolucion) */}
+                 <div className="form-group">
+                  <label>Total Calculado:</label>
+                  <p>
+                    {newOperation.type === 'compra'
+                        ? formatCurrency(parseFloat(newProductDetails.precio || 0) * parseInt(newProductDetails.cantidad || 0))
+                        : formatCurrency(newOperation.productos.reduce((sum, prod) => sum + (prod.precio * prod.cantidad), 0))
+                    }
+                  </p>
                 </div>
 
-                <div className="form-group">
-                  <label>Monto *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newOperation.amount}
-                    onChange={(e) => setNewOperation({ 
-                      ...newOperation, 
-                      amount: parseFloat(e.target.value) || 0 
-                    })}
-                    required
-                    disabled={isLoading}
-                  />
-                </div>
 
                 <div className="form-actions">
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     className="submit-button"
-                    disabled={isLoading}
+                    disabled={isLoading || (newOperation.type === 'compra' && (!newProductDetails.nombre || !newProductDetails.categoria || !newProductDetails.precio || !newProductDetails.cantidad || parseFloat(newProductDetails.precio) <= 0 || parseInt(newProductDetails.cantidad) <= 0)) || (newOperation.type === 'devolucion' && newOperation.productos.length === 0)}
                   >
                     {isLoading ? 'Guardando...' : 'Guardar Operación'}
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="cancel-button"
                     onClick={() => !isLoading && setShowModal(false)}
                     disabled={isLoading}
@@ -505,21 +761,21 @@ const SuppliersPanel = () => {
             ) : (
               <form onSubmit={handleSupplierSubmit}>
                 <h2>{editingSupplier ? 'Editar Proveedor' : 'Nuevo Proveedor'}</h2>
-                
+
                 <div className="form-group">
                   <label>Nombre *</label>
                   <input
                     type="text"
                     value={editingSupplier?.nombre || newSupplier.nombre}
-                    onChange={(e) => 
-                      editingSupplier 
-                        ? setEditingSupplier({ 
-                            ...editingSupplier, 
-                            nombre: e.target.value 
+                    onChange={(e) =>
+                      editingSupplier
+                        ? setEditingSupplier({
+                            ...editingSupplier,
+                            nombre: e.target.value
                           })
-                        : setNewSupplier({ 
-                            ...newSupplier, 
-                            nombre: e.target.value 
+                        : setNewSupplier({
+                            ...newSupplier,
+                            nombre: e.target.value
                           })
                     }
                     required
@@ -535,14 +791,14 @@ const SuppliersPanel = () => {
                     value={editingSupplier?.telefono || newSupplier.telefono}
                     onChange={(e) => {
                       const onlyNums = e.target.value.replace(/[^0-9]/g, '');
-                      editingSupplier 
-                        ? setEditingSupplier({ 
-                            ...editingSupplier, 
-                            telefono: onlyNums 
+                      editingSupplier
+                        ? setEditingSupplier({
+                            ...editingSupplier,
+                            telefono: onlyNums
                           })
-                        : setNewSupplier({ 
-                            ...newSupplier, 
-                            telefono: onlyNums 
+                        : setNewSupplier({
+                            ...newSupplier,
+                            telefono: onlyNums
                           });
                     }}
                     required
@@ -559,15 +815,15 @@ const SuppliersPanel = () => {
                   <input
                     type="email"
                     value={editingSupplier?.email || newSupplier.email}
-                    onChange={(e) => 
-                      editingSupplier 
-                        ? setEditingSupplier({ 
-                            ...editingSupplier, 
-                            email: e.target.value 
+                    onChange={(e) =>
+                      editingSupplier
+                        ? setEditingSupplier({
+                            ...editingSupplier,
+                            email: e.target.value
                           })
-                        : setNewSupplier({ 
-                            ...newSupplier, 
-                            email: e.target.value 
+                        : setNewSupplier({
+                            ...newSupplier,
+                            email: e.target.value
                           })
                     }
                     required
@@ -581,15 +837,15 @@ const SuppliersPanel = () => {
                   <input
                     type="text"
                     value={editingSupplier?.contacto || newSupplier.contacto}
-                    onChange={(e) => 
-                      editingSupplier 
-                        ? setEditingSupplier({ 
-                            ...editingSupplier, 
-                            contacto: e.target.value 
+                    onChange={(e) =>
+                      editingSupplier
+                        ? setEditingSupplier({
+                            ...editingSupplier,
+                            contacto: e.target.value
                           })
-                        : setNewSupplier({ 
-                            ...newSupplier, 
-                            contacto: e.target.value 
+                        : setNewSupplier({
+                            ...newSupplier,
+                            contacto: e.target.value
                           })
                     }
                     required
@@ -603,35 +859,32 @@ const SuppliersPanel = () => {
                   <input
                     type="text"
                     value={editingSupplier?.factura || newSupplier.factura}
-                    onChange={(e) => 
-                      editingSupplier 
-                        ? setEditingSupplier({ 
-                            ...editingSupplier, 
-                            factura: e.target.value 
+                    onChange={(e) =>
+                      editingSupplier
+                        ? setEditingSupplier({
+                            ...editingSupplier,
+                            factura: e.target.value
                           })
-                        : setNewSupplier({ 
-                            ...newSupplier, 
-                            factura: e.target.value 
+                        : setNewSupplier({
+                            ...newSupplier,
+                            factura: e.target.value
                           })
                     }
-                    maxLength={10}
+                    maxLength={30}
                     disabled={isLoading}
                   />
                 </div>
 
                 <div className="form-actions">
-                  <button 
-                    type="submit" 
+                  <button
+                    type="submit"
                     className="submit-button"
-                    disabled={isLoading}
+                    disabled={isLoading || (!editingSupplier && (!newSupplier.nombre || !newSupplier.contacto || !newSupplier.telefono || !newSupplier.email))}
                   >
-                    {isLoading 
-                      ? (editingSupplier ? 'Actualizando...' : 'Creando...') 
-                      : (editingSupplier ? 'Actualizar Proveedor' : 'Crear Proveedor')
-                    }
+                    {isLoading ? 'Guardando...' : 'Guardar Proveedor'}
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="cancel-button"
                     onClick={() => !isLoading && setShowModal(false)}
                     disabled={isLoading}
