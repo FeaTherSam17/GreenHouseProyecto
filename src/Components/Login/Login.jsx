@@ -12,8 +12,8 @@ const Login = () => {
 
   // Estado para las credenciales del usuario
   const [credentials, setCredentials] = useState({
-    username: '', 
-    password: ''  
+    username: '',
+    password: ''
   });
 
   // Estado para manejar errores y estado de carga
@@ -26,14 +26,34 @@ const Login = () => {
   // Maneja el envío del formulario
   const handleSubmit = async (e) => {
     e.preventDefault(); // Previene el comportamiento por defecto del formulario.
-    setLoading(true); // Activa el estado de carga.
     setError(''); // Limpia cualquier mensaje de error previo.
+
+    // --- BLOQUE DE VALIDACIÓN ---
+    // 1. Validar que no estén vacíos (aunque 'required' ayuda)
+    if (!credentials.username || !credentials.password) {
+      setError('Usuario y contraseña son requeridos');
+      return; // Detiene la ejecución aquí
+    }
+
+    // 2. Validar longitud (¡lo que pediste!)
+    if (credentials.username.length > 50) {
+      setError('El usuario no puede tener más de 50 caracteres');
+      return; // Detiene la ejecución
+    }
+
+    if (credentials.password.length > 100) {
+      setError('La contraseña no puede tener más de 100 caracteres');
+      return; // Detiene la ejecución
+    }
+    // --- FIN DEL BLOQUE DE VALIDACIÓN ---
+
+    setLoading(true); // Activa el estado de carga (movido después de la validación)
 
     try {
       // Petición POST al backend para autenticación
       const response = await fetch('http://localhost:3001/login', { // URL actualizada
         method: 'POST', // Se utiliza el método POST para enviar los datos al servidor.
-        headers: { 
+        headers: {
           'Content-Type': 'application/json', // Se indica que los datos son en formato JSON.
           'Accept': 'application/json' // Se espera una respuesta también en formato JSON.
         },
@@ -46,11 +66,11 @@ const Login = () => {
       // Se convierte la respuesta en JSON
       const data = await response.json();
 
-     // Si hubo error, se lanza una excepción
-    if (!response.ok) {
-      console.error(`Error ${response.status}: ${data.error || 'Error en la autenticación'}`); // Muestra el error en la consola
-      throw new Error(data.error || 'Error en la autenticación'); // Lanza el error con el mensaje correspondiente
-    }
+      // Si hubo error, se lanza una excepción
+      if (!response.ok) {
+        console.error(`Error ${response.status}: ${data.error || 'Error en la autenticación'}`); // Muestra el error en la consola
+        throw new Error(data.error || 'Error en la autenticación'); // Lanza el error con el mensaje correspondiente
+      }
       // Si el login fue exitoso
       if (data.success) {
         // Se guarda el usuario en localStorage
@@ -68,7 +88,7 @@ const Login = () => {
       }
     } catch (err) {
       // Muestra mensaje si no se puede conectar o si hay otro error
-      setError(err.message.includes('Failed to fetch') 
+      setError(err.message.includes('Failed to fetch')
         ? 'No se pudo conectar al servidor' // Si no se puede conectar al servidor, muestra un mensaje.
         : err.message); // De lo contrario, muestra el mensaje de error general.
     } finally {
@@ -109,6 +129,7 @@ const Login = () => {
               })}
               required
               autoComplete="username"
+              maxLength={50} // Limite de caraxteres
             />
           </div>
 
@@ -130,9 +151,10 @@ const Login = () => {
                 })}
                 required
                 autoComplete="current-password"
+                maxLength={30} // limite de caracteres
               />
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="toggle-password"
                 onClick={() => setShowPassword(!showPassword)} // Alterna el estado de mostrar/ocultar contraseña
                 aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
@@ -147,9 +169,9 @@ const Login = () => {
           </div>
 
           {/* Botón para enviar el formulario */}
-          <button 
-            type="submit" 
-            className="login-button" 
+          <button
+            type="submit"
+            className="login-button"
             disabled={loading}
             aria-busy={loading}
           >
@@ -161,7 +183,7 @@ const Login = () => {
         <div className="about-section">
           <div className="about-content">
             <h3>Acerca del sistema</h3>
-            <p>Versión 1.5.2.2 (Estable) - Sistema de administración para invernaderos</p>
+            <p>Versión 1.5.2.3 (Límite en campos Login) - Sistema de administración para invernaderos</p>
             <p>© {new Date().getFullYear()} Todos los derechos reservados</p> {/* Muestra el año actual */}
           </div>
         </div>
