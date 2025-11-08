@@ -3,6 +3,121 @@ import { useNavigate } from 'react-router-dom';
 import './CajeroPanel.css';
 import logo from '../Login/assets/logo.png';
 
+// --- Componente ModalPago (Calculadora de Cambio) ---
+const ModalPago = ({ isOpen, onClose, totalAPagar, onConfirm }) => {
+  const [dineroRecibido, setDineroRecibido] = useState('');
+  const [cambio, setCambio] = useState(0);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false); 
+
+  const handleRecibidoChange = (e) => {
+    const recibidoStr = e.target.value;
+    setDineroRecibido(recibidoStr); 
+
+    const recibido = parseFloat(recibidoStr) || 0;
+
+    if (recibidoStr === '' || recibido === 0) {
+      setError('');
+      setCambio(0);
+    } else if (recibido < totalAPagar) {
+      setError('El dinero recibido es insuficiente');
+      setCambio(0);
+    } else {
+      setError('');
+      setCambio((recibido - totalAPagar).toFixed(2));
+    }
+  };
+
+  const handleConfirmar = async () => { 
+    const recibido = parseFloat(dineroRecibido) || 0;
+    if (recibido < totalAPagar && totalAPagar > 0) {
+      setError('El dinero recibido es insuficiente');
+      return;
+    }
+    
+    setLoading(true);
+    setError(''); 
+
+    try {
+      const result = await onConfirm(); 
+
+      if (result.success === true) {
+        handleClose(); 
+      } else {
+        setError(result.message); 
+      }
+    } catch (err) {
+      setError('Error inesperado al confirmar el pago.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    setDineroRecibido('');
+    setCambio(0);
+    setError('');
+    setLoading(false);
+    onClose(); 
+  };
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <button className="modal-close-btn" onClick={handleClose} style={{position: 'absolute', top: '10px', right: '15px', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer'}}>&times;</button>
+        <h2>Procesar Pago</h2>
+        
+        <div className="resumen-linea total" style={{fontSize: '1.5rem', marginBottom: '20px'}}>
+          <span>Total a Pagar:</span>
+          <span>${totalAPagar.toFixed(2)}</span>
+        </div>
+
+        <div className="input-group" style={{marginBottom: '10px'}}>
+          <label htmlFor="dineroRecibido" style={{display: 'block', marginBottom: '5px'}}>Dinero Recibido:</label>
+          <input
+            id="dineroRecibido"
+            type="number"
+            value={dineroRecibido}
+            onChange={handleRecibidoChange}
+            placeholder="Ingrese el monto..."
+            style={{ width: '100%', padding: '10px', fontSize: '1.2rem', boxSizing: 'border-box' }}
+            autoFocus
+            disabled={loading}
+          />
+        </div>
+
+        {error && <p className="error-message" style={{color: 'red', margin: '10px 0 0 0', fontWeight: 'bold'}}>{error}</p>}
+
+        {cambio > 0 && !error && (
+          <h3 style={{ color: 'green', marginTop: '15px' }}>
+            Cambio a devolver: ${cambio}
+          </h3>
+        )}
+
+        <div className="acciones-venta" style={{marginTop: '20px'}}>
+          <button className="cancelar-btn" onClick={handleClose} disabled={loading}>
+            Cancelar
+          </button>
+          <button
+            className="finalizar-btn"
+            onClick={handleConfirmar}
+            disabled={loading || (parseFloat(dineroRecibido) < totalAPagar && totalAPagar > 0) || !!error}
+          >
+            {loading ? 'Procesando...' : 'Confirmar Pago'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+// --- Fin Componente ModalPago ---
+
+
+// --- Componente Principal CajeroPanel ---
 const CajeroPanel = () => {
   const [productos, setProductos] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -17,6 +132,9 @@ const CajeroPanel = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
+  const [modalPagoAbierto, setModalPagoAbierto] = useState(false);
+  const [errorGlobal, setErrorGlobal] = useState(''); 
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -38,10 +156,14 @@ const CajeroPanel = () => {
     const cargarDatos = async () => {
       try {
         setLoading(true);
+        setError(''); 
+        setErrorGlobal('');
         
+        // --- AQUÍ ESTÁ LA CORRECCIÓN ---
+        // Volví a poner los headers de Authorization
         const productosResponse = await fetch('http://localhost:3001/productos', {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${localStorage.getItem('token')}` 
           }
         });
         
@@ -50,28 +172,40 @@ const CajeroPanel = () => {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
         });
+        // --- FIN DE LA CORRECCIÓN ---
 
         if (!productosResponse.ok || !categoriasResponse.ok) {
+          // Si el token es inválido, el backend debería responder 401
+          if (productosResponse.status === 401 || categoriasResponse.status === 401) {
+            handleLogout(); // Desloguea al usuario
+            throw new Error('Sesión inválida o expirada');
+          }
           throw new Error('Error al cargar datos');
         }
 
         const productosData = await productosResponse.json();
         const categoriasData = await categoriasResponse.json();
 
-        if (productosData.success) {
+        if (productosData.success && Array.isArray(productosData.productos)) {
           setProductos(productosData.productos.map(p => ({
             ...p,
             precio: Number(p.precio) || 0,
             stock: Number(p.stock) || 0
           })));
+        } else {
+          console.warn("Respuesta de productos no esperada:", productosData);
+          setProductos([]);
         }
-        if (categoriasData.success) setCategorias(categoriasData.categorias);
+
+        if (categoriasData.success && Array.isArray(categoriasData.categorias)) {
+          setCategorias(categoriasData.categorias);
+        } else {
+          console.warn("Respuesta de categorías no esperada:", categoriasData);
+          setCategorias([]);
+        }
 
       } catch (err) {
         setError(err.message);
-        if (err.message.includes('401')) {
-          handleLogout();
-        }
       } finally {
         setLoading(false);
       }
@@ -113,6 +247,9 @@ const CajeroPanel = () => {
     } else {
       const nuevoItem = {
         ...producto,
+        id_producto: producto.id_producto, 
+        nombre: producto.nombre,
+        precio: producto.precio,
         cantidad: 1,
         total: producto.precio
       };
@@ -169,14 +306,14 @@ const CajeroPanel = () => {
     const coincideBusqueda = producto.nombre.toLowerCase().includes(busqueda.toLowerCase());
     let coincideCategoria = true;
     if (categoriaFiltro !== 'todas') {
-      coincideCategoria = producto.categoria === categorias.find(c => String(c.id_categoria) === String(categoriaFiltro))?.nombre;
+      coincideCategoria = String(producto.id_categoria) === String(categoriaFiltro);
     }
     return coincideBusqueda && coincideCategoria;
   });
 
   const productosPorCategoria = categorias.reduce((acc, categoria) => {
     const productosDeCategoria = productosFiltrados.filter(
-      p => p.id_categoria === categoria.id_categoria
+      p => String(p.id_categoria) === String(categoria.id_categoria)
     );
     if (productosDeCategoria.length > 0) {
       acc.push({
@@ -188,7 +325,7 @@ const CajeroPanel = () => {
   }, []);
 
   if (categoriaFiltro === 'todas') {
-    const productosSinCategoria = productosFiltrados.filter(p => !p.id_categoria);
+    const productosSinCategoria = productosFiltrados.filter(p => !p.id_categoria || !categorias.some(c => String(c.id_categoria) === String(p.id_categoria)));
     if (productosSinCategoria.length > 0) {
       productosPorCategoria.push({
         nombre: 'Sin categoría',
@@ -199,28 +336,22 @@ const CajeroPanel = () => {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://localhost:3001/api/logout', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      // No necesitas un endpoint de logout si solo borras el localStorage
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     } finally {
       localStorage.clear();
-      window.location.href = '/';
+      window.location.href = '/'; // Redirige al login
     }
   };
 
-  const finalizarVenta = async () => {
+  const registrarVentaEnAPI = async () => {
     if (ventaActual.items.length === 0) {
-      alert("No hay productos en la venta");
-      return;
+      return { success: false, message: "No hay productos en la venta" };
     }
 
     const nuevaVenta = {
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: new Date().toISOString().split('T')[0], // Formato YYYY-MM-DD
       total: ventaActual.total,
       items: ventaActual.items.map(item => ({
         id_producto: item.id_producto,
@@ -235,7 +366,7 @@ const CajeroPanel = () => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}` // <-- CORRECCIÓN AQUÍ TAMBIÉN
         },
         body: JSON.stringify(nuevaVenta)
       });
@@ -243,7 +374,8 @@ const CajeroPanel = () => {
       const data = await response.json();
       
       if (data.success) {
-        alert('Venta registrada exitosamente');
+        // Venta exitosa
+        console.log('Venta registrada exitosamente'); 
         
         const productosActualizados = productos.map(prod => {
           const itemVendido = ventaActual.items.find(v => v.id_producto === prod.id_producto);
@@ -254,20 +386,45 @@ const CajeroPanel = () => {
         });
         
         setProductos(productosActualizados);
+        
         setVentaActual({
           items: [],
           subtotal: 0,
           descuento: 0,
           total: 0
         });
+        
+        return { success: true }; 
+        
       } else {
-        alert('Error al registrar venta: ' + (data.message || ''));
+        // Venta fallida
+        return { success: false, message: data.message || 'Error desconocido al registrar' }; 
       }
     } catch (error) {
       console.error('Error al enviar la venta:', error);
-      alert('Error de conexión al registrar la venta');
+      return { success: false, message: 'Error de conexión al registrar la venta' }; 
     }
   };
+  
+  const abrirModalPago = () => {
+    setErrorGlobal(''); 
+    if (ventaActual.items.length === 0) {
+      alert("No hay productos en la venta"); 
+      return;
+    }
+    
+    if (ventaActual.total <= 0) {
+      (async () => {
+        const result = await registrarVentaEnAPI();
+        if (!result.success) {
+          setErrorGlobal(result.message); 
+        }
+      })();
+    } else {
+      setModalPagoAbierto(true);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -292,8 +449,8 @@ const CajeroPanel = () => {
   return (
     <div className="cajero-panel">
       <button className="floating-logout-btn" onClick={handleLogout} title="Cerrar sesión">
-  <span className="logout-icon">⎋</span>
-</button>
+        <span className="logout-icon">⎋</span>
+      </button>
 
       <header className="panel-header">
         <div className="header-content">
@@ -328,15 +485,14 @@ const CajeroPanel = () => {
                     {categoria.nombre}
                   </option>
                 ))}
-                {/* Eliminada la opción de "sin_categoria" */}
               </select>
             </div>
           </div>
 
           <div className="productos-categorizados">
             {categoriaFiltro === 'todas' ? (
-              productosPorCategoria.map(grupo => (
-                <div key={grupo.nombre} className="categoria-grupo">
+              productosPorCategoria.map((grupo, index) => (
+                <div key={grupo.nombre || index} className="categoria-grupo">
                   <h3 className="titulo-categoria">{grupo.nombre}</h3>
                   <div className="productos-grid">
                     {grupo.productos.map(producto => (
@@ -448,16 +604,21 @@ const CajeroPanel = () => {
             </div>
           </div>
 
+          {errorGlobal && <p style={{color: 'red', fontWeight: 'bold', textAlign: 'center'}}>{errorGlobal}</p>}
+
           <div className="acciones-venta">
             <button
               className="cancelar-btn"
-              onClick={() => setVentaActual({ items: [], subtotal: 0, descuento: 0, total: 0 })}
+              onClick={() => {
+                setVentaActual({ items: [], subtotal: 0, descuento: 0, total: 0 });
+                setErrorGlobal(''); 
+              }}
             >
               Cancelar Venta
             </button>
             <button
               className="finalizar-btn"
-              onClick={finalizarVenta}
+              onClick={abrirModalPago} 
               disabled={ventaActual.items.length === 0}
             >
               Finalizar Venta
@@ -465,6 +626,13 @@ const CajeroPanel = () => {
           </div>
         </div>
       </div>
+
+      <ModalPago
+        isOpen={modalPagoAbierto}
+        onClose={() => setModalPagoAbierto(false)}
+        totalAPagar={ventaActual.total}
+        onConfirm={registrarVentaEnAPI} 
+      />
     </div>
   );
 };
