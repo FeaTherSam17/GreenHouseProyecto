@@ -12,8 +12,8 @@ const Login = () => {
 
   // Estado para las credenciales del usuario
   const [credentials, setCredentials] = useState({
-    username: '', 
-    password: ''  
+    username: '',
+    password: ''
   });
 
   // Estado para manejar errores y estado de carga
@@ -33,7 +33,7 @@ const Login = () => {
       // Petición POST al backend para autenticación
       const response = await fetch('http://localhost:3001/login', { // URL actualizada
         method: 'POST', // Se utiliza el método POST para enviar los datos al servidor.
-        headers: { 
+        headers: {
           'Content-Type': 'application/json', // Se indica que los datos son en formato JSON.
           'Accept': 'application/json' // Se espera una respuesta también en formato JSON.
         },
@@ -46,11 +46,11 @@ const Login = () => {
       // Se convierte la respuesta en JSON
       const data = await response.json();
 
-     // Si hubo error, se lanza una excepción
-    if (!response.ok) {
-      console.error(`Error ${response.status}: ${data.error || 'Error en la autenticación'}`); // Muestra el error en la consola
-      throw new Error(data.error || 'Error en la autenticación'); // Lanza el error con el mensaje correspondiente
-    }
+      // Si hubo error, se lanza una excepción
+      if (!response.ok) {
+        console.error(`Error ${response.status}: ${data.error || 'Error en la autenticación'}`); // Muestra el error en la consola
+        throw new Error(data.error || 'Error en la autenticación'); // Lanza el error con el mensaje correspondiente
+      }
       // Si el login fue exitoso
       if (data.success) {
         // Se guarda el usuario en localStorage
@@ -68,7 +68,7 @@ const Login = () => {
       }
     } catch (err) {
       // Muestra mensaje si no se puede conectar o si hay otro error
-      setError(err.message.includes('Failed to fetch') 
+      setError(err.message.includes('Failed to fetch')
         ? 'No se pudo conectar al servidor' // Si no se puede conectar al servidor, muestra un mensaje.
         : err.message); // De lo contrario, muestra el mensaje de error general.
     } finally {
@@ -91,7 +91,7 @@ const Login = () => {
         <form onSubmit={handleSubmit} className="login-form">
           {/* Muestra mensaje de error si existe */}
           {error && <div className="error-message">{error}</div>}
-          
+
           {/* Campo para el nombre de usuario */}
           <div className="input-group">
             <label htmlFor="username">
@@ -131,8 +131,8 @@ const Login = () => {
                 required
                 autoComplete="current-password"
               />
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="toggle-password"
                 onClick={() => setShowPassword(!showPassword)} // Alterna el estado de mostrar/ocultar contraseña
                 aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
@@ -147,14 +147,23 @@ const Login = () => {
           </div>
 
           {/* Botón para enviar el formulario */}
-          <button 
-            type="submit" 
-            className="login-button" 
+          <button
+            type="submit"
+            className="login-button"
             disabled={loading}
             aria-busy={loading}
           >
             {loading ? 'Verificando...' : 'Ingresar al sistema'} {/* Muestra "Verificando..." mientras se está cargando */}
           </button>
+          {/* Botón de "Olvidé contraseña" */}
+          <button
+            type="button"
+            className="forgot-password-button"
+            onClick={() => navigate('/recuperar-contraseña')} // Redirige a la ruta de recuperación
+          >
+            Olvidé contraseña
+          </button>
+
         </form>
 
         {/* Sección informativa del sistema */}

@@ -145,6 +145,8 @@
   transition: background-color 0.3s; /* animación en hover */
 }
 
+
+
 /* Cambia el verde al pasar el mouse */
 .login-button:hover {
   background-color: #3e8e41;
@@ -183,3 +185,22 @@
   font-size: 0.9rem;
   text-align: center;
 }
+
+/* Botón de "Olvidé contraseña" */
+.forgot-password-button {
+  width: 100%;
+  padding: 12px;
+  background-color: transparent; /* fondo transparente */
+  color: #4CAF50; /* mismo verde que el header */
+  border: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+  margin-top: 10px;
+  text-decoration: underline; /* subrayado */
+  transition: color 0.3s;
+}
+
+.forgot-password-button:hover {
+  color: #3e8e41; /* verde más oscuro al pasar el mouse */
+}
+

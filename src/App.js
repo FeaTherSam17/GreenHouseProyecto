@@ -6,6 +6,8 @@ import CajeroPanel from './Components/Cajero/CajeroPanel';
 import AlmacenistaPanel from './Components/Almacenista/AlmacenistaPanel';
 import JardineroPanel from './Components/Jardinero/JardineroPanel';
 import './App.css';
+import RecoveryPassword from './Components/Login/RecoveryPassword';
+
 
 // Componente que protege rutas según el rol del usuario
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -33,6 +35,9 @@ function App() {
       <Routes>
         {/* Ruta pública para iniciar sesión */}
         <Route path="/" element={<Login />} />
+
+          {/* Ruta de recuperación de contraseña */}
+        <Route path="/recuperar-contraseña" element={<RecoveryPassword />} />
         
         {/* Ruta para el administrador, solo accesible si el rol es 1 */}
         <Route 
