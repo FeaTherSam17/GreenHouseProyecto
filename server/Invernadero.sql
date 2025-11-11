@@ -27,6 +27,9 @@ SET time_zone = "+00:00";
 -- Estructura de tabla para la tabla `categorias`
 --
 
+CREATE DATABASE invernadero;
+USE invernadero;
+
 CREATE TABLE `categorias` (
   `id_categoria` int(11) NOT NULL,
   `nombre` varchar(50) NOT NULL,
@@ -217,17 +220,17 @@ CREATE TABLE `usuarios` (
 --
 
 INSERT INTO `usuarios` (`id_usuario`, `nombre`, `apellidoP`, `apellidoM`, `username`, `id_rol`, `password`, `fecha_creacion`) VALUES
-(1, 'Erika', 'Qewr', 'Qwer', 'admin1', 4, 'pru', '2025-05-13 22:42:24'),
-(2, 'Luis', 'Martínez', 'Ruiz', 'almacen1', 2, 'almacen123', '2025-05-13 22:42:24'),
-(3, 'Sofía', 'Pérez', 'Santos', 'cajero1', 3, 'cajero123', '2025-05-13 22:42:24'),
-(4, 'Carlos', 'Hernández', 'Vega', 'jardinero1', 4, 'jardinero123', '2025-05-13 22:42:24'),
-(6, 'Erika', 'Addams', 'Ravenscroft', 'erikaA', 1, 'admin', '2025-05-13 23:47:15'),
-(7, 'Qwer', 'Qwer', 'Qwer', 'qwer', 4, 'qwer', '2025-05-14 00:20:24'),
-(10, 'Samuel', 'Alcantara', 'Fernandez', 'sam', 1, '123', '2025-05-14 00:34:36'),
-(11, 'Cajerp', 'Caja', 'Cajetin', 'cajero', 3, 'cajero', '2025-05-14 01:11:24'),
-(12, 'Jardin', 'Jairo', 'Jairo', 'jardinero', 4, 'jardinero', '2025-05-14 01:11:39'),
-(13, 'Alma', 'Alma', 'Alma', 'alma', 2, 'almacenista', '2025-05-14 01:12:01'),
-(15, 'Tobo', 'Nogijbnod', 'Weirngwe', 'wertwlejht', 2, 'wertewrtwertweryruyt', '2025-05-15 13:52:26');
+(1, 'Erika', 'Qewr', 'Qwer', 'admin1', 4, '$2b$10$lpTl/Sb6iwqG0C98nD9y/uNxhpEDF1U3BvRP4mJkeER7tza9.hLQK', '2025-05-13 16:42:24'),
+(2, 'Luis', 'Martínez', 'Ruiz', 'almacen1', 2, '$2b$10$yS4DXa/dENMr0TOshr3NO.vz07Ni4LqHca9TnvcXmk7BfEatsHxn.', '2025-05-13 16:42:24'),
+(3, 'Sofía', 'Pérez', 'Santos', 'cajero1', 3, '$2b$10$9nGE6XrTHnepRYNmD9JQPOXqsXAjQUzWpCG3TMsC..3t94E7quNAe', '2025-05-13 16:42:24'),
+(4, 'Carlos', 'Hernández', 'Vega', 'jardinero1', 4, '$2b$10$b3xZg.sNZ/iQO3eRzO6Y..EtQiUjYN6PFu.sJUbbXBkBLarTxUeea', '2025-05-13 16:42:24'),
+(6, 'Erika', 'Addams', 'Ravenscroft', 'erikaA', 1, '$2b$10$DSRpxurEsuOyeguqHA6rRu8DV0BUZf97QBeI/SXC0/ZWVSdbX.AMW', '2025-05-13 17:47:15'),
+(7, 'Qwer', 'Qwer', 'Qwer', 'qwer', 4, '$2b$10$6IH0sCgmj8agnon8aADfCOGicnwB6hzJI0Q8UltcCf.MPKnSJE6va', '2025-05-13 18:20:24'),
+(10, 'Samuel', 'Alcantara', 'Fernandez', 'sam', 1, '$2b$10$d2AXT4i4Hk1buoDUO7/gf.UMDNmH6NDpkrqa14w7Wu.WvEZwvnO1i', '2025-05-13 18:34:36'),
+(11, 'Cajerp', 'Caja', 'Cajetin', 'cajero', 3, '$2b$10$J42MB2hAaYy2x..aiOCIruUTF.wjjgB1GDxttyv9/4PvoEQIZIbRm', '2025-05-13 19:11:24'),
+(12, 'Jardin', 'Jairo', 'Jairo', 'jardinero', 4, '$2b$10$ylo6lmGPof0yvtEmItZIJ.wHb7aOxkNvw3Ehef5DIaY5BQ8RR6OLq', '2025-05-13 19:11:39'),
+(13, 'Alma', 'Alma', 'Alma', 'alma', 2, '$2b$10$wxcsH34FbgPbRn/w8N44TuA6p6Z.FnOwYefC2zqa69GJmuUCzxe8G', '2025-05-13 19:12:01'),
+(15, 'Tobo', 'Nogijbnod', 'Weirngwe', 'wertwlejht', 2, '$2b$10$mZEEvMmkXOTElbqyH/nQiOt.H1feHIi.1NhiEG.LIISWjIv18eTta', '2025-05-15 07:52:26');
 
 -- --------------------------------------------------------
 

@@ -111,7 +111,7 @@ const Login = () => {
         <form onSubmit={handleSubmit} className="login-form">
           {/* Muestra mensaje de error si existe */}
           {error && <div className="error-message">{error}</div>}
-          
+
           {/* Campo para el nombre de usuario */}
           <div className="input-group">
             <label htmlFor="username">
@@ -177,6 +177,15 @@ const Login = () => {
           >
             {loading ? 'Verificando...' : 'Ingresar al sistema'} {/* Muestra "Verificando..." mientras se está cargando */}
           </button>
+          {/* Botón de "Olvidé contraseña" */}
+          <button
+            type="button"
+            className="forgot-password-button"
+            onClick={() => navigate('/recuperar-contraseña')} // Redirige a la ruta de recuperación
+          >
+            Olvidé contraseña
+          </button>
+
         </form>
 
         {/* Sección informativa del sistema */}
